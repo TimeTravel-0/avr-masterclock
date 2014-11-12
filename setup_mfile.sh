@@ -4,6 +4,6 @@ wget http://www.sax.de/~joerg/mfile/mfile.tar.gz
 tar -xzf mfile.tar.gz 
 rm mfile.tar.gz
 cd mfile
-echo "export MFILE_HOME="." ; wish mfile.tcl" > run.sh
+echo 'export MFILE_HOME="." ; wish mfile.tcl' > run.sh
 chmod +x run.sh
 ./run.sh
