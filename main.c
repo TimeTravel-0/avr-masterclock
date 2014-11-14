@@ -1,3 +1,6 @@
+
+#define F_CPU 12000000UL
+
 #include <avr/io.h>
 #include <util/delay.h>
 #include <avr/fuse.h>
@@ -18,12 +21,33 @@
 */
 
 
+
+// fuses settings in source code get compiled into data at magic numbered addresses in the hex file
+// these addresses are outside avr memory space, e.g. prog fails if avrdude does not know that
+// (by cmdline switch etc)
+
+FUSES =
+{
+.low = LFUSE_DEFAULT,
+.high = HFUSE_DEFAULT,
+.extended = EFUSE_DEFAULT,
+};
+
+
+uint8_t prbs(void)
+{
+    static uint32_t sequence = 1; // initial value
+    sequence = sequence << 1 |  (((sequence >> 30) ^ (sequence >> 27)) & 1); // prbs calculation
+    return sequence & 0x01; // return a bit
+}
+
 void config_io_pins(void)
 {
     // set these three pins as output
     DDRD |= (1 << PD0);
     DDRD |= (1 << PD1);
     DDRD |= (1 << PD2);
+    DDRD |= (1 << PD3);
 }
 
 void output_positive(void) // H bridge pos.
@@ -92,7 +116,28 @@ int main(void)
     config_io_pins();
     config_interrupts();
 
-    while(1){} // empty main loop - interesting stuff happens in ISRs.
+
+    while(1)
+    {
+        if(prbs()) // 50%
+        {
+            PORTD&= ~( 1 << PD3 ); // set
+        }
+        if(prbs() && prbs() && prbs() && prbs()) // 0.5 * 0.5 * 0.5 * 0.5 = 6.25 %
+        {
+            PORTD|= ( 1 << PD3 ); // reset
+        }
+
+        _delay_ms(1);
+        if(prbs())
+        {
+            _delay_ms(5);
+        }
+        if(prbs())
+        {
+            _delay_ms(19);
+        }
+    } // empty main loop - interesting stuff happens in ISRs.
 
     return 0;
 }
