@@ -26,12 +26,14 @@
 // these addresses are outside avr memory space, e.g. prog fails if avrdude does not know that
 // (by cmdline switch etc)
 
+
 FUSES =
 {
 .low = LFUSE_DEFAULT,
 .high = HFUSE_DEFAULT,
 .extended = EFUSE_DEFAULT,
 };
+
 
 
 uint8_t prbs(void)
@@ -43,11 +45,11 @@ uint8_t prbs(void)
 
 void config_io_pins(void)
 {
-    // set these three pins as output
-    DDRD |= (1 << PD0);
-    DDRD |= (1 << PD1);
-    DDRD |= (1 << PD2);
-    DDRD |= (1 << PD3);
+    // set these pins as output
+    DDRD |= (1 << PD0); // h bridge 1
+    DDRD |= (1 << PD1); // h bridge 2
+    DDRD |= (1 << PD2); // second ticker (toggles every second)
+    DDRD |= (1 << PD3); // flicker output, prbs driven
 }
 
 void output_positive(void) // H bridge pos.
@@ -75,23 +77,23 @@ void fsm(void)
 
     switch(state)
     {
-        case 0:
+        case 0: // sate 0
             output_positive();
             state=state+1;
             break;
-        case 10:
-        case 70:
+        case 10: // state 10
+        case 70: // state 70
             output_zero();
             state=state+1;
             break;
-        case 60:
+        case 60: // state 60
             output_negative();
             state=state+1;
             break;
-        case 120:
+        case 120: // state 120
             state=0;
             break;
-        default:
+        default: // default state. if no other sate applies, go to next state
             state=state+1;
     }
 
@@ -119,25 +121,32 @@ int main(void)
 
     while(1)
     {
-        if(prbs()) // 50%
+
+        // flicker an LED just because we can (and to simulate a neon tube for flip clocks ;)
+        if(prbs()) // 50% certaincy to switch LED on
         {
             PORTD&= ~( 1 << PD3 ); // set
         }
-        if(prbs() && prbs() && prbs() && prbs()) // 0.5 * 0.5 * 0.5 * 0.5 = 6.25 %
+        else // 50 %
         {
-            PORTD|= ( 1 << PD3 ); // reset
+            if(prbs() && prbs() && prbs() ) // 0.5 * 0.5 * 0.5 = 6.25 % certaincy to switch LED off
+            {
+                PORTD|= ( 1 << PD3 ); // reset
+            }
         }
 
-        _delay_ms(1);
-        if(prbs())
+        // delay random delay times to make flicker more realistic
+        _delay_ms(1); // wait 1ms, because smaller values make no sense (not visible to eye)
+        if(prbs()) // 50% certaincy for 5ms delay
         {
             _delay_ms(5);
         }
-        if(prbs())
+        if(prbs()) // 50% certaincy for 19ms delay
         {
             _delay_ms(19);
         }
-    } // empty main loop - interesting stuff happens in ISRs.
+
+    } // interesting stuff happens in ISRs.
 
     return 0;
 }

@@ -140,6 +140,33 @@ lss: $(TARGET).lss
 sym: $(TARGET).sym
 
 
+# fuses as per https://www.mikrocontroller.net/articles/AVR-GCC-Tutorial/Exkurs_Makefiles
+fuses: lfuses hfuses efuses
+
+lfuses: build
+	-$(OBJCOPY) -j lfuses --change-section-address lfuses=0 \
+	-O ihex $(TARGET).elf $(TARGET)-lfuse.hex
+	@if [ -f $(TARGET)-lfuse.hex ]; then \
+	$(AVRDUDE) $(AVRDUDE_FLAGS) -U lfuse:w:$(TARGET)-lfuse.hex; \
+	fi;
+
+hfuses: build
+	-$(OBJCOPY) -j hfuses --change-section-address hfuses=0 \
+	-O ihex $(TARGET).elf $(TARGET)-hfuse.hex
+	@if [ -f $(TARGET)-hfuse.hex ]; then \
+	$(AVRDUDE) $(AVRDUDE_FLAGS) -U hfuse:w:$(TARGET)-hfuse.hex; \
+	fi;
+
+efuses: build
+	-$(OBJCOPY) -j efuses --change-section-address efuses=0 \
+	-O ihex $(TARGET).elf $(TARGET)-efuse.hex
+	@if [ -f $(TARGET)-efuse.hex ]; then \
+	$(AVRDUDE) $(AVRDUDE_FLAGS) -U efuse:w:$(TARGET)-efuse.hex; \
+	fi;
+
+
+
+
 # Program the device.  
 program: $(TARGET).hex $(TARGET).eep
 	$(AVRDUDE) $(AVRDUDE_FLAGS) $(AVRDUDE_WRITE_FLASH) $(AVRDUDE_WRITE_EEPROM)
@@ -206,7 +233,8 @@ $(TARGET).elf: $(OBJ)
 # Target: clean project.
 clean:
 	$(REMOVE) $(TARGET).hex $(TARGET).eep $(TARGET).cof $(TARGET).elf \
-	$(TARGET).map $(TARGET).sym $(TARGET).lss \
+	$(TARGET).map $(TARGET).sym $(TARGET).lss $(TARGET)-lfuse.hex \
+	$(TARGET)-hfuse.hex $(TARGET)-efuse.hex \
 	$(OBJ) $(LST) $(SRC:.c=.s) $(SRC:.c=.d)
 
 depend:
