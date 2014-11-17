@@ -193,7 +193,8 @@ extcoff: $(TARGET).elf
 .SUFFIXES: .elf .hex .eep .lss .sym
 
 .elf.hex:
-	$(OBJCOPY) -O $(FORMAT) -R .eeprom $< $@
+        # modified as suggested here http://www.avrfreaks.net/comment/444040#comment-444040 (added "-R .fuse")
+	$(OBJCOPY) -O $(FORMAT) -R .eeprom -R .fuse $< $@
 
 .elf.eep:
 	-$(OBJCOPY) -j .eeprom --set-section-flags=.eeprom="alloc,load" \
