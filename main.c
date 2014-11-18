@@ -1,5 +1,5 @@
 
-#define F_CPU 32768UL
+#define F_CPU 32768UL //32kHz quartz crystal
 
 #include <avr/io.h>
 #include <util/delay.h>
@@ -17,12 +17,13 @@
 #        sleep 50 seconds
 #        create negative pulse (one of the two outputs low, the other high) across H bridge for 10 seconds
 #
+#   (low prio meanwhile: flicker with pin/LED for fun)
 #
 */
 
 
 
-// fuses settings in source code get compiled into data at magic numbered addresses in the hex file
+// fuses settings in source code get compiled into data at magic numbered addresses in the elf file
 // these addresses are outside avr memory space, e.g. prog fails if avrdude does not know that
 
 // defaults:
@@ -30,12 +31,12 @@
 // avrdude: safemode: hfuse reads as DF
 // avrdude: safemode: efuse reads as FF
 
-// see http://www.engbedded.com/fusecalc/
-// see http://www.avrfreaks.net/forum/help-avrdude-and-fuse-program-elf-file
+// see http://www.engbedded.com/fusecalc/ for 0xD8, 0xDF, 0xFF
 
 FUSES =
 {
-.low = (FUSE_CKSEL0 & FUSE_CKSEL1 & FUSE_CKSEL2 & FUSE_CKSEL3 & FUSE_SUT0 /* & FUSE_CKDIV8 */), // 0xe0
+// external clock, long startup time, do not divide clock by 8
+.low = (FUSE_CKSEL0 & FUSE_CKSEL1 & FUSE_CKSEL2 & /*FUSE_CKSEL3 & FUSE_SUT0 & */ FUSE_SUT1 /* & FUSE_CKDIV8 */), // 0xD8
 .high = HFUSE_DEFAULT,
 .extended = EFUSE_DEFAULT,
 };
