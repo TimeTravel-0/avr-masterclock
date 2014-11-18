@@ -80,25 +80,25 @@ void output_zero(void) // H bridge off
 // finite state machine
 void fsm(void)
 {
-    static unsigned int state=0;
+    static uint8_t state=0;
 
     switch(state)
     {
         case 0: // sate 0
             output_positive();
-            state=state+1;
+            state=1; // go to state 1 next
             break;
-        case 10: // state 10
-        case 70: // state 70
+        case 2: // state 2
+        case 62: // state 62
             output_zero();
-            state=state+1;
+            state=state+1; // go to next state
             break;
         case 60: // state 60
             output_negative();
-            state=state+1;
+            state=61; // go to state 61 next
             break;
-        case 120: // state 120
-            state=0;
+        case 119: // state 119
+            state=0; // return to first state instead of state 120
             break;
         default: // default state. if no other sate applies, go to next state
             state=state+1;
@@ -108,15 +108,40 @@ void fsm(void)
 
 void config_interrupts(void)
 {
-    TCCR0B = 0b00000101; // clock divider TODO
-    TIMSK |= (1<<TOIE0); // enable overflow interrupt for timer 0
+    // clock input to AVR is 32768 Hz
+    // timer 0 should fire at 1Hz
+    // this means divide input clock by 2^15
+    // see Figure 27. 8-bit Timer/Counter Block Diagram in attiny2313 datasheet for reference
+
+    // timer/counter control register B - TTC0B
+    // last 3 bit define clock select for timer 0
+    // 001 = 2^1  = 1
+    // 010 = 2^3  = 8
+    // 011 = 2^6  = 64
+    // 100 = 2^8  = 256
+    // 101 = 2^10 = 1024
+    TCCR0B = 0b00000100; // prescale = 256 / 2^8
+    TCCR0A = (1<<WGM01); // CTC mode, so we can go for 2^7 here
+
+    // the timer starts at value 0:
+    TCNT0 = 0x0;
+
+    TIMSK |= (1<<OCIE0A); // enable compare interrupt for timer 0
+
+    // The counter value (TCNT0) increases until a Compare Match occurs
+    // between TCNT0 and OCR0A, and then counter (TCNT0) is cleared.
+    OCR0A = 0x7f; // half way up
+
+
     sei(); // enable global interrupts
 }
 
-ISR(TIMER0_OVF_vect) // timer 0 overflow interrupt service routine
+// called at 1Hz frequency
+ISR(TIMER0_COMPA_vect)
 {
     fsm();
     PORTD^= ( 1 << PD2 ); // toggle bit to show step
+
 }
 
 
