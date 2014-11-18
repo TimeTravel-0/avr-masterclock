@@ -24,12 +24,18 @@
 
 // fuses settings in source code get compiled into data at magic numbered addresses in the hex file
 // these addresses are outside avr memory space, e.g. prog fails if avrdude does not know that
-// (by cmdline switch etc)
 
+// defaults:
+// avrdude: safemode: lfuse reads as 64
+// avrdude: safemode: hfuse reads as DF
+// avrdude: safemode: efuse reads as FF
+
+// see http://www.engbedded.com/fusecalc/
+// see http://www.avrfreaks.net/forum/help-avrdude-and-fuse-program-elf-file
 
 FUSES =
 {
-.low = LFUSE_DEFAULT,
+.low = (FUSE_CKSEL0 & FUSE_CKSEL1 & FUSE_CKSEL2 & FUSE_CKSEL3 & FUSE_SUT0 /* & FUSE_CKDIV8 */), // 0xe0
 .high = HFUSE_DEFAULT,
 .extended = EFUSE_DEFAULT,
 };

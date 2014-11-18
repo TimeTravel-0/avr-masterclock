@@ -141,6 +141,12 @@ sym: $(TARGET).sym
 
 
 # fuses as per https://www.mikrocontroller.net/articles/AVR-GCC-Tutorial/Exkurs_Makefiles
+# does not work as there are no lfuses, hfuses or efuses sections! only a fuse section present
+# http://www.fussylogic.co.uk/blog/?p=740
+
+fuse:
+	-$(OBJCOPY) -j .fuse -O ihex $(TARGET).elf fuses.hex --change-section-lma .fuse=0
+
 fuses: lfuses hfuses efuses
 
 lfuses: build
