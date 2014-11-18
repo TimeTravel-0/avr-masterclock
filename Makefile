@@ -144,31 +144,16 @@ sym: $(TARGET).sym
 # does not work as there are no lfuses, hfuses or efuses sections! only a fuse section present
 # http://www.fussylogic.co.uk/blog/?p=740
 
-fuse:
-	-$(OBJCOPY) -j .fuse -O ihex $(TARGET).elf fuses.hex --change-section-lma .fuse=0
+# target specific variable (holds the fuses settings from .elf)
+upload-fuses: FUSES = $(shell avr-objdump -s --section=.fuse $(TARGET).elf  | tail -1 | awk '{print substr($$2,1,2),substr($$2,3,2),substr($$2,5,2)}')
 
-fuses: lfuses hfuses efuses
+upload-fuses: $(TARGET).elf
+	$(AVRDUDE) $(AVRDUDE_FLAGS) \
+	$(if $(word 1,$(FUSES)),-U lfuse:w:0x$(word 1,$(FUSES)):m) \
+	$(if $(word 2,$(FUSES)),-U hfuse:w:0x$(word 2,$(FUSES)):m) \
+	$(if $(word 3,$(FUSES)),-U efuse:w:0x$(word 3,$(FUSES)):m)
 
-lfuses: build
-	-$(OBJCOPY) -j lfuses --change-section-address lfuses=0 \
-	-O ihex $(TARGET).elf $(TARGET)-lfuse.hex
-	@if [ -f $(TARGET)-lfuse.hex ]; then \
-	$(AVRDUDE) $(AVRDUDE_FLAGS) -U lfuse:w:$(TARGET)-lfuse.hex; \
-	fi;
 
-hfuses: build
-	-$(OBJCOPY) -j hfuses --change-section-address hfuses=0 \
-	-O ihex $(TARGET).elf $(TARGET)-hfuse.hex
-	@if [ -f $(TARGET)-hfuse.hex ]; then \
-	$(AVRDUDE) $(AVRDUDE_FLAGS) -U hfuse:w:$(TARGET)-hfuse.hex; \
-	fi;
-
-efuses: build
-	-$(OBJCOPY) -j efuses --change-section-address efuses=0 \
-	-O ihex $(TARGET).elf $(TARGET)-efuse.hex
-	@if [ -f $(TARGET)-efuse.hex ]; then \
-	$(AVRDUDE) $(AVRDUDE_FLAGS) -U efuse:w:$(TARGET)-efuse.hex; \
-	fi;
 
 
 
