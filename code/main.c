@@ -1,5 +1,6 @@
 
-#define F_CPU 32768UL //32kHz quartz crystal
+//#define F_CPU 32768UL //32kHz quartz crystal
+#define F_CPU 512000UL // 4096000 but we divide this by 8!
 
 #include <avr/io.h>
 #include <util/delay.h>
@@ -43,6 +44,13 @@ FUSES =
 };
 
 
+#define IR_TIME_THRESHOLD 5
+#define IR_TIME_OUT 20
+
+// global vars
+volatile uint16_t isrctr, ircmd, ircmdpos;
+volatile uint8_t fsm_fast;
+
 
 uint8_t prbs(void)
 {
@@ -65,6 +73,10 @@ void config_io_pins(void)
     DDRB |= (1 << PB1); // h bridge 2
     DDRB |= (1 << PB2); // h bridge 3
     DDRB |= (1 << PB3); // h bridge 4
+    
+    // initial data
+    PORTD|= ( 1 << PD5 );
+    
 }
 
 void output_positive(void) // H bridge pos.
@@ -141,23 +153,172 @@ void config_interrupts(void)
     // The counter value (TCNT0) increases until a Compare Match occurs
     // between TCNT0 and OCR0A, and then counter (TCNT0) is cleared.
     OCR0A = 0x7f; // half way up
+    
+    
+    
+    // int1
+    
+	MCUCR |= (1<<ISC10) | (1<<ISC11); // logic level change of INT1 creates interrupt
+    GIMSK = 1<<INT1;					// Enable INT1
+    
+    
+    // timer 1
+    
+    
+    TCCR1B = 0b00000001; // prescale = 8
+    TCCR1A = (1<<WGM01); // CTC mode, so we can go for 2^7 here
+    TCNT1 = 0x0;
+    TIMSK |= (1<<OCIE1A); // enable compare interrupt for timer 0
+    OCR1A = 0x4f; // half way up
 
 
     sei(); // enable global interrupts
 }
 
-// called at 1Hz frequency ; not 2ms!
+// called at 2ms!
 ISR(TIMER0_COMPA_vect)
 {
     fsm();
-    PORTD^= ( 1 << PD2 ); // toggle bit to show step
-    PORTB^= ( 1 << PB3 ); // toggle bit to show step
+    //PORTD^= ( 1 << PD2 ); // toggle bit to show step
+    //PORTB^= ( 1 << PB3 ); // toggle bit to show step
+}
 
+// called at ~200us interval
+ISR(TIMER1_COMPA_vect)
+{
+    TCNT1 = 0x0; // reset timer counter
+    //PORTB^= ( 1 << PB3 ); // toggle bit to show step
+    isrctr=isrctr+1;
+    
+    if(isrctr>IR_TIME_OUT)
+    {
+        isrctr=0;
+        ircmd=0;
+        ircmdpos=0;
+    }
+    
+    // long pulse is ~ 1200 us  ; 1200 / 200 = 9
+    // short pulse is ~ 640 us  ; 640 / 200 = 3
+    
+    
+    
+    
+}
+
+ISR(INT1_vect) // infrared receiver
+{
+    
+    
+    
+    //PORTB^= ( 1 << PB3 ); // toggle bit to show step
+    
+    if(MCUCR & (1<<ISC10)) // we just had a rising edge
+	{
+        // low time was "isrctr".
+        
+        ircmd<<=1; // shift up 1 bit
+        if(isrctr < IR_TIME_THRESHOLD)
+        {
+            // we received a short pulse (logical zero)
+            //ircmd&=~(1);
+        }
+        else
+        {
+            // we received a long pulse (logical one)
+            ircmd|=1;
+        }
+        
+        
+        /*
+        PORTB&= ~( 1 << PB3 ); // set to 0
+        _delay_us(5);
+        if(ircmd&0x01==0x01) _delay_us(15);
+        PORTB|= ( 1 << PB3 ); // set to 1
+        */
+        
+        //  S = 11011 0100 1011 1000 11001 
+        // 2S = 11111 0100 1011 1000 11001 
+        
+        //  S = 10 0110 0011 1010 0101 1011 ; = 0x 6 3A 5B
+        // 2S = 10 0110 0011 1010 0101 1111 ; = 0x 6 3A 5F
+        
+        // in sw:
+        //  S = 1111 0001 1101 0010 00 <-> 0100 1011 1000 1111 = 4B8F
+        // 2S = 1111 0001 1101 0011 00 <-> 1100 1011 1000 1111 = CB8F
+        
+        ircmdpos+=1;
+        if(ircmdpos>20)
+        {
+        
+        /*
+        for(uint8_t i=0;i<20;i++)
+        {
+            PORTB&= ~( 1 << PB3 ); // set to 0
+            PORTB|= ( 1 << PB3 ); // set to 1
+            PORTB&= ~( 1 << PB3 ); // set to 0
+            if(ircmd&0x01 == 0x01) PORTB|= ( 1 << PB3 ); // set to 1
+            ircmd>>=1;
+            _delay_us(10);
+        }
+        */
+        
+        
+        isrctr=0;
+        ircmd=0;
+        ircmdpos=0;
+        
+        }
+        
+        if((ircmd&0xFF) == 0x4B)
+        {
+            
+            fsm();
+            
+            PORTD&= ~( 1 << PD5 );
+            _delay_ms(10);
+            PORTD|= ( 1 << PD5 );
+            
+            fsm_fast=0x01;
+            ircmd = 0x00;
+            isrctr = 0x00;    
+        }
+        if((ircmd&0xFF) == 0xCB)
+        {
+            
+            PORTD&= ~( 1 << PD5 );
+            _delay_ms(500);
+            PORTD|= ( 1 << PD5 );
+            _delay_ms(500);
+            PORTD&= ~( 1 << PD5 );
+            _delay_ms(500);
+            PORTD|= ( 1 << PD5 );
+            
+            ircmd = 0x00;
+            isrctr = 0x00;    
+        }
+        
+        
+        
+
+		/*Set interrupt sense to falling edge*/
+		MCUCR |= (1<<ISC11);
+		MCUCR &= ~(1<<ISC10);
+	}
+	else // we just had a falling edge
+	{
+        isrctr=0; // reset counter
+	
+		/*Set interrupt sense to rising edge*/
+		MCUCR |= (1<<ISC10) | (1<<ISC11);
+	}
 }
 
 
 int main(void)
 {
+    
+    ircmd=0x00;
+    fsm_fast=0x00;
     config_io_pins();
     config_interrupts();
 
@@ -168,14 +329,14 @@ int main(void)
         // flicker an LED just because we can (and to simulate a neon tube for flip clocks ;)
         if(prbs()) // 50% certaincy to switch LED on
         {
-            PORTD&= ~( 1 << PD5 ); // set
+            //PORTD&= ~( 1 << PD5 ); // set
             PORTB&= ~( 1 << PB2 ); // set
         }
         else // 50 %
         {
             if(prbs() && prbs() && prbs() ) // 0.5 * 0.5 * 0.5 = 6.25 % certaincy to switch LED off
             {
-                PORTD|= ( 1 << PD5 ); // reset
+                //PORTD|= ( 1 << PD5 ); // reset
                 PORTB|= ( 1 << PB2 ); // reset
             }
         }
