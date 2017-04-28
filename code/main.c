@@ -8,6 +8,7 @@
 
 /*
 #    avr runs on 32768 Hz clock crystal (XTAL pins)
+#    >> NO it runs off 4,096 MHz
 #
 #    basic function is as follows:
 #
@@ -35,8 +36,8 @@
 
 FUSES =
 {
-// external clock, long startup time, do not divide clock by 8
-.low = (FUSE_CKSEL0 & FUSE_CKSEL1 & FUSE_CKSEL2 & /*FUSE_CKSEL3 & FUSE_SUT0 & */ FUSE_SUT1 /* & FUSE_CKDIV8 */), // 0xD8
+// external clock, long startup time, do divide clock by 8
+.low = (FUSE_CKSEL0 & FUSE_CKSEL1 & FUSE_CKSEL2 & /*FUSE_CKSEL3 & FUSE_SUT0 & */ FUSE_SUT1  & FUSE_CKDIV8 ), // 0xD8
 .high = HFUSE_DEFAULT,
 .extended = EFUSE_DEFAULT,
 };
@@ -56,31 +57,38 @@ void config_io_pins(void)
     DDRD |= (1 << PD0); // h bridge 1
     DDRD |= (1 << PD1); // h bridge 2
     DDRD |= (1 << PD2); // second ticker (toggles every second)
-    DDRD |= (1 << PD3); // flicker output, prbs driven
+    //DDRD |= (1 << PD3); // flicker output, prbs driven
+    DDRD |= (1 << PD5);
+    
+    
+    DDRB |= (1 << PB0); // h bridge 1
+    DDRB |= (1 << PB1); // h bridge 2
+    DDRB |= (1 << PB2); // h bridge 3
+    DDRB |= (1 << PB3); // h bridge 4
 }
 
 void output_positive(void) // H bridge pos.
 {
-    PORTD |= (1 << PD0); // set this pin high
-    PORTD &=~(1 << PD1); // set this pin low
+    PORTB |= (1 << PB0); // set this pin high
+    PORTB &=~(1 << PB1); // set this pin low
 }
 
 void output_negative(void) // H bridge neg.
 {
-    PORTD &=~(1 << PD0); // set this pin low
-    PORTD |= (1 << PD1); // set this pin high
+    PORTB &=~(1 << PB0); // set this pin low
+    PORTB |= (1 << PB1); // set this pin high
 }
 
 void output_zero(void) // H bridge off
 {
-    PORTD &=~(1 << PD0); // set this pin low
-    PORTD &=~(1 << PD1); // set this pin low
+    PORTB &=~(1 << PB0); // set this pin low
+    PORTB &=~(1 << PB1); // set this pin low
 }
 
 // finite state machine
 void fsm(void)
 {
-    static uint8_t state=0;
+    static uint32_t state=0;
 
     switch(state)
     {
@@ -88,16 +96,16 @@ void fsm(void)
             output_positive();
             state=1; // go to state 1 next
             break;
-        case 2: // state 2
-        case 62: // state 62
-            output_zero();
+        case 20: // state 2
+        case 620: // state 62
+            //output_zero();
             state=state+1; // go to next state
             break;
-        case 60: // state 60
+        case 600: // state 60
             output_negative();
-            state=61; // go to state 61 next
+            state=610; // go to state 61 next
             break;
-        case 119: // state 119
+        case 1190: // state 119
             state=0; // return to first state instead of state 120
             break;
         default: // default state. if no other sate applies, go to next state
@@ -108,9 +116,9 @@ void fsm(void)
 
 void config_interrupts(void)
 {
-    // clock input to AVR is 32768 Hz
+    // clock input to AVR is 32768 Hz ; no 4,096MHz
     // timer 0 should fire at 1Hz
-    // this means divide input clock by 2^15
+    // this means divide input clock by 2^15 ; no! 4096000 Hz / ? = 1
     // see Figure 27. 8-bit Timer/Counter Block Diagram in attiny2313 datasheet for reference
 
     // timer/counter control register B - TTC0B
@@ -120,8 +128,10 @@ void config_interrupts(void)
     // 011 = 2^6  = 64
     // 100 = 2^8  = 256
     // 101 = 2^10 = 1024
-    TCCR0B = 0b00000100; // prescale = 256 / 2^8
+    TCCR0B = 0b00000010; // prescale = 8
     TCCR0A = (1<<WGM01); // CTC mode, so we can go for 2^7 here
+    
+    // triggering at 2ms / 4ms interval
 
     // the timer starts at value 0:
     TCNT0 = 0x0;
@@ -136,11 +146,12 @@ void config_interrupts(void)
     sei(); // enable global interrupts
 }
 
-// called at 1Hz frequency
+// called at 1Hz frequency ; not 2ms!
 ISR(TIMER0_COMPA_vect)
 {
     fsm();
     PORTD^= ( 1 << PD2 ); // toggle bit to show step
+    PORTB^= ( 1 << PB3 ); // toggle bit to show step
 
 }
 
@@ -157,13 +168,15 @@ int main(void)
         // flicker an LED just because we can (and to simulate a neon tube for flip clocks ;)
         if(prbs()) // 50% certaincy to switch LED on
         {
-            PORTD&= ~( 1 << PD3 ); // set
+            PORTD&= ~( 1 << PD5 ); // set
+            PORTB&= ~( 1 << PB2 ); // set
         }
         else // 50 %
         {
             if(prbs() && prbs() && prbs() ) // 0.5 * 0.5 * 0.5 = 6.25 % certaincy to switch LED off
             {
-                PORTD|= ( 1 << PD3 ); // reset
+                PORTD|= ( 1 << PD5 ); // reset
+                PORTB|= ( 1 << PB2 ); // reset
             }
         }
 
